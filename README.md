@@ -2,7 +2,7 @@
 
 **A non-custodial digital vault for passing on crypto assets after death.**
 
-> A bank vault, not a dashboard.
+A bank vault, not a dashboard.
 
 Legacy lets a crypto holder lock assets in an on-chain vault that only unlocks for their named heirs — and only after the owner has stopped proving they're alive. There's no custodian, no lawyer, and no trust required between owner and heir: liveness, death, and inheritance are all enforced by the smart contract itself.
 
