@@ -262,6 +262,9 @@ contract LegacyVault is Initializable, ReentrancyGuardTransient {
 
     /**
      * @notice Binds the owner's liveness credential to this vault, once.
+     * @dev Registration demands a fresh proof from the owner, so it also counts
+     *      as a check-in. Without this, an owner who registers after the
+     *      interval has lapsed would need a second proof straight away.
      * @param proof Verifier-specific credential and proof of possession.
      */
     function registerLiveness(bytes calldata proof) external onlyOwner {
@@ -271,8 +274,8 @@ contract LegacyVault is Initializable, ReentrancyGuardTransient {
 
         verifier.registerCredential(owner, livenessChallenge(), proof);
 
-        livenessNonce++;
         livenessRegistered = true;
+        _recordLiveness();
     }
 
     /**
@@ -286,12 +289,20 @@ contract LegacyVault is Initializable, ReentrancyGuardTransient {
 
         verifier.verifyLiveness(owner, livenessChallenge(), proof);
 
+        _recordLiveness();
+    }
+
+    /**
+     * @dev Consumes the current challenge and restarts the liveness timer. A
+     *      verified liveness proof is the strongest possible evidence the owner
+     *      is alive: it also defeats any open claim (claims started before the
+     *      new `lastCheckIn` can no longer finalize), clears pending or
+     *      confirmed death attestations and restores the nominal timelock.
+     */
+    function _recordLiveness() private {
         livenessNonce++;
         lastCheckIn = block.timestamp;
 
-        // A verified liveness proof is the strongest possible evidence the
-        // owner is alive: it clears any pending or confirmed death attestations
-        // and restores the vault to its nominal timelock.
         _resetDeathAttestations();
 
         emit CheckedIn(block.timestamp);
