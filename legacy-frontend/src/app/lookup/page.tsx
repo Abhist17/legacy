@@ -159,7 +159,7 @@ export default function TransparencyLookup() {
 
   // Public answer to "would the heirs actually receive what they were
   // promised?" — assets stay in the owner's wallet, so this is checked live.
-  const { readiness, isLoading: isCheckingBacking } = useAllocationHealth(
+  const { allocations, readiness, isLoading: isCheckingBacking } = useAllocationHealth(
     queriedAddress ?? undefined,
     owner as `0x${string}` | undefined
   );
@@ -425,7 +425,11 @@ export default function TransparencyLookup() {
                   {isCheckingBacking && readiness.backed + readiness.broken === 0 ? (
                     "Checking…"
                   ) : readiness.pending === 0 ? (
-                    "Nothing assigned yet"
+                    allocations.length === 0
+                      ? "Nothing assigned yet"
+                      : allocations.length === 1
+                        ? "Claimed by the heir"
+                        : `All ${allocations.length} claimed by heirs`
                   ) : readiness.broken > 0 ? (
                     <span style={{ color: "var(--status-red)" }}>
                       {readiness.backed} of {readiness.pending} — {readiness.broken} would not pay out in full
