@@ -14,7 +14,7 @@ import { validatePolicy } from "@/lib/policy/validate";
 import { simulatePolicy } from "@/lib/policy/simulate";
 import { compileIntent } from "@/lib/policy/compiler";
 import { type AllocationHealthMap } from "@/lib/allocations";
-import { CONTRACT_ADDRESSES, worldChainSepolia } from "@/lib/constants";
+import { CONTRACT_ADDRESSES, activeChain, explorerTxUrl } from "@/lib/constants";
 import { LegacyPolicyEngineABI } from "@/lib/contracts/abis";
 
 interface PolicyEngineModalProps {
@@ -72,7 +72,7 @@ export function PolicyEngineModal({
       return computePolicyHash(
         context.vaultAddress,
         targetVersion,
-        chainId || worldChainSepolia.id,
+        chainId || activeChain.id,
         policyEngineAddress,
         policy.rules
       );
@@ -759,7 +759,7 @@ export function PolicyEngineModal({
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[#2E353A]">
                   <span className="text-[#9A9E98]">Network / Chain ID</span>
-                  <span className="font-mono text-[#EDEAE3]">{chainId || worldChainSepolia.id}</span>
+                  <span className="font-mono text-[#EDEAE3]">{chainId || activeChain.id}</span>
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[#2E353A]">
                   <span className="text-[#9A9E98]">Rule Count</span>
@@ -833,7 +833,7 @@ export function PolicyEngineModal({
                   <div>
                     <span className="text-[#9A9E98] block">Transaction Hash:</span>
                     <a
-                      href={`${worldChainSepolia.blockExplorers?.default?.url || "https://sepolia.worldscan.org"}/tx/${txHash}`}
+                      href={explorerTxUrl(txHash)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono text-[#B8894A] hover:underline break-all"

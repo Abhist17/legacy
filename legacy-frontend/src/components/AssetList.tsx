@@ -16,8 +16,9 @@ import {
   isAddress,
   keccak256,
   stringToHex,
+  parseAbi,
 } from "viem";
-import { VaultStatus, worldChainSepolia } from "@/lib/constants";
+import { VaultStatus, activeChain, CHAIN_NAME, CHAIN_TOKENS } from "@/lib/constants";
 import { ERC20ABI, ERC20AdapterABI, ERC20AdapterBytecode } from "@/lib/contracts/adapters";
 import { AddressChip } from "./AddressChip";
 import { Skeleton } from "./Skeleton";
@@ -56,7 +57,7 @@ interface AssetListProps {
 }
 
 export interface TokenItem {
-  address?: `0x${string}`; // undefined for Native ETH
+  address?: `0x${string}`; // undefined for native MON
   name: string;
   symbol: string;
   decimals: number;
@@ -68,20 +69,32 @@ export interface TokenItem {
 
 const DEFAULT_TOKENS: TokenItem[] = [
   {
-    name: "Native Ether",
-    symbol: "ETH",
+    name: "Monad",
+    symbol: "MON",
     decimals: 18,
     isNative: true,
   },
   {
-    address: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
+    address: CHAIN_TOKENS.wrappedNative,
+    name: "Wrapped MON",
+    symbol: "WMON",
+    decimals: 18,
+  },
+  {
+    address: CHAIN_TOKENS.usdc,
     name: "USD Coin (Circle)",
     symbol: "USDC",
     decimals: 6,
   },
 ];
 
-const STORAGE_KEY = "legacy_imported_tokens_4801";
+const STORAGE_KEY = `legacy_imported_tokens_${activeChain.id}`;
+
+const wrappedNativeAbi = parseAbi(["function deposit() payable"]);
+
+// MON kept back when allocating native MON, so the owner can still pay gas
+// for the wrap, adapter deployment, approval and assignment transactions.
+const NATIVE_GAS_RESERVE = parseUnits("0.05", 18);
 
 export function AssetList({
   assets,
@@ -103,7 +116,7 @@ export function AssetList({
   // Native ETH balance via wagmi
   const { data: ethBalance, isLoading: isEthLoading } = useBalance({
     address,
-    chainId: worldChainSepolia.id,
+    chainId: activeChain.id,
   });
 
   // Modal display states
@@ -130,11 +143,8 @@ export function AssetList({
     return DEFAULT_TOKENS;
   });
 
-  // Start on the first token that can actually be assigned (native ETH can't be), so the dialog opens ready to use
-  const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(() => {
-    const firstAssignable = DEFAULT_TOKENS.findIndex((t) => !t.isNative);
-    return firstAssignable === -1 ? 0 : firstAssignable;
-  });
+  // Start on native MON, the asset most owners hold.
+  const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [tokenFilter, setTokenFilter] = useState<"ALL" | "IN_WALLET">("ALL");
 
@@ -191,7 +201,7 @@ export function AssetList({
         abi: ERC20ABI,
         functionName: "balanceOf" as const,
         args: [address] as const,
-        chainId: worldChainSepolia.id,
+        chainId: activeChain.id,
       }));
   }, [address, tokenList]);
 
@@ -328,7 +338,7 @@ export function AssetList({
   // Token mode needs an assignable token and a positive amount before the confirm button wakes up
   const isTokenFormIncomplete =
     modalMode === "TOKENS"
-      ? Boolean(selectedToken?.isNative) || !(Number(amount) > 0)
+      ? !(Number(amount) > 0)
       : !manualLabel.trim() || !isAddress(manualExecutorAddress.trim());
 
   // Filtered tokens for token picker
@@ -418,18 +428,13 @@ export function AssetList({
       return;
     }
 
-    // Branch 2: Native ETH
-    if (selectedToken.isNative) {
-      setErrorText(
-        "World Chain Sepolia requires an ERC-20 token allowance for automated non-custodial succession. Please select testnet USDC or wrap your ETH into WETH."
-      );
-      return;
-    }
-
-    // Branch 3: ERC-20 Token
-    const tokenAddr = selectedToken.address;
-    const tokenSymbol = selectedToken.symbol;
-    const tokenDecimals = selectedToken.decimals;
+    // Branch 2: ERC-20 token, or native MON. Native balances can't be approved,
+    // so MON is wrapped 1:1 into WMON first (it stays in the owner's wallet) and
+    // then allocated exactly like any other ERC-20.
+    const wrapNative = Boolean(selectedToken.isNative);
+    const tokenAddr = wrapNative ? CHAIN_TOKENS.wrappedNative : selectedToken.address;
+    const tokenSymbol = wrapNative ? "WMON" : selectedToken.symbol;
+    const tokenDecimals = wrapNative ? 18 : selectedToken.decimals;
     const currentBalance = selectedToken.balance ?? 0n;
 
     if (!tokenAddr) {
@@ -456,12 +461,26 @@ export function AssetList({
       setIsSubmitting(true);
       const parsedAmount = parseUnits(amount, tokenDecimals);
 
-      if (parsedAmount > currentBalance) {
+      if (wrapNative ? parsedAmount + NATIVE_GAS_RESERVE > currentBalance : parsedAmount > currentBalance) {
         setErrorText(
-          `Allocation amount (${amount} ${tokenSymbol}) exceeds detected wallet balance. The vault owner must hold tokens for succession claims to be executable.`
+          wrapNative
+            ? `Allocation amount (${amount} MON) leaves too little MON for gas. Keep at least 0.05 MON in your wallet.`
+            : `Allocation amount (${amount} ${tokenSymbol}) exceeds detected wallet balance. The vault owner must hold tokens for succession claims to be executable.`
         );
         setIsSubmitting(false);
         return;
+      }
+
+      if (wrapNative) {
+        setExecutionStage(`Wrapping ${amount} MON into WMON (it stays in your wallet)...`);
+        const wrapHash = await writeContractAsync({
+          chainId: activeChain.id,
+          address: tokenAddr,
+          abi: wrappedNativeAbi,
+          functionName: "deposit",
+          value: parsedAmount,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: wrapHash });
       }
 
       // Step 1: Deploy ERC20Adapter
@@ -476,12 +495,12 @@ export function AssetList({
         abi: ERC20AdapterABI,
         bytecode: ERC20AdapterBytecode,
         args: [tokenAddr, parsedAmount, vaultAddress],
-        chain: worldChainSepolia,
+        chain: activeChain,
         account: address,
       });
 
       console.log("⏳ ERC20Adapter deployment tx broadcast:", deployHash);
-      setExecutionStage("[1/3] Awaiting adapter deployment confirmation on World Chain Sepolia...");
+      setExecutionStage(`[1/3] Awaiting adapter deployment confirmation on ${CHAIN_NAME}...`);
 
       const deployReceipt = await publicClient.waitForTransactionReceipt({ hash: deployHash });
       const adapterAddress = deployReceipt.contractAddress;
@@ -504,7 +523,7 @@ export function AssetList({
       if (currentAllowance < parsedAmount) {
         console.log("👉 Prompting approval for adapter:", adapterAddress);
         const approveHash = await writeContractAsync({
-          chainId: worldChainSepolia.id,
+          chainId: activeChain.id,
           address: tokenAddr,
           abi: ERC20ABI,
           functionName: "approve",
@@ -870,7 +889,7 @@ export function AssetList({
                       fontWeight: 700,
                     }}
                   >
-                    World Chain Sepolia
+                    {CHAIN_NAME}
                   </span>
                 </div>
                 <h3
@@ -1356,7 +1375,7 @@ export function AssetList({
                               </div>
                               <div style={{ fontSize: "0.6875rem", color: "var(--text-secondary)", marginTop: "2px" }}>
                                 {selectedToken?.isNative
-                                  ? "Native Gas Asset (World Chain Sepolia)"
+                                  ? `Native gas asset on ${CHAIN_NAME} · wrapped to WMON automatically`
                                   : `Contract: ${selectedToken?.address?.slice(0, 8)}...${selectedToken?.address?.slice(-6)}`}
                               </div>
                             </div>
@@ -1384,7 +1403,7 @@ export function AssetList({
                         </div>
                       </div>
 
-                      {/* Native ETH not supported for automated succession */}
+                      {/* Native MON is wrapped to WMON before allocation */}
                       {selectedToken?.isNative && (
                         <div
                           style={{
@@ -1396,7 +1415,7 @@ export function AssetList({
                             lineHeight: 1.4,
                           }}
                         >
-                          Native ETH isn&apos;t supported for succession allocation. Select <strong>testnet USDC</strong> or wrap ETH to <strong>WETH</strong> to continue.
+                          MON is wrapped 1:1 into <strong>WMON</strong> first, in your own wallet. Nothing leaves your wallet: the vault only gets permission to pass it on.
                         </div>
                       )}
 
@@ -1730,7 +1749,7 @@ export function AssetList({
                     <button
                       type="submit"
                       disabled={isSubmitting || isTokenFormIncomplete}
-                      title={isTokenFormIncomplete && !selectedToken?.isNative ? "Fill in every field to continue" : undefined}
+                      title={isTokenFormIncomplete ? "Fill in every field to continue" : undefined}
                       className="btn-brass"
                       style={{
                         flex: 2,

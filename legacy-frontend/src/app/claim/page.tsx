@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { isAddress } from "viem";
 import { useAccount, useReadContract, useWriteContract, usePublicClient, useChainId, useSwitchChain } from "wagmi";
 import { useWalletModal } from "@/components/WalletModal";
-import { VaultStatus, ClaimStatus, CONTRACT_ADDRESSES, worldChainSepolia, shortAddress, humanDuration } from "@/lib/constants";
+import { VaultStatus, ClaimStatus, CONTRACT_ADDRESSES, activeChain, shortAddress, humanDuration, CHAIN_NAME } from "@/lib/constants";
 import { fetchVaultMeta, type VaultMetaRecord } from "@/lib/vault-meta/client";
 import { LegacyVaultABI } from "@/lib/contracts/abis";
 import { ClaimPortalSkeleton } from "@/components/Skeleton";
@@ -24,7 +24,7 @@ export default function HeirClaimPortal() {
   const { isConnected, isConnecting, isReconnecting, address } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  const isWrongChain = isConnected && chainId !== worldChainSepolia.id;
+  const isWrongChain = isConnected && chainId !== activeChain.id;
   const { openConnectModal } = useWalletModal();
   const publicClient = usePublicClient();
   const searchParams = useSearchParams();
@@ -218,10 +218,10 @@ export default function HeirClaimPortal() {
       setIsProcessing(true);
       setFeedbackMessage(null);
       if (isWrongChain && switchChain) {
-        await switchChain({ chainId: worldChainSepolia.id });
+        await switchChain({ chainId: activeChain.id });
       }
       const hash = await writeContractAsync({
-        chainId: worldChainSepolia.id,
+        chainId: activeChain.id,
         address: vaultAddress,
         abi: LegacyVaultABI,
         functionName: "initiateClaim",
@@ -270,10 +270,10 @@ export default function HeirClaimPortal() {
       setIsProcessing(true);
       setFeedbackMessage(null);
       if (isWrongChain && switchChain) {
-        await switchChain({ chainId: worldChainSepolia.id });
+        await switchChain({ chainId: activeChain.id });
       }
       const hash = await writeContractAsync({
-        chainId: worldChainSepolia.id,
+        chainId: activeChain.id,
         address: vaultAddress,
         abi: LegacyVaultABI,
         functionName: "finalizeClaim",
@@ -307,10 +307,10 @@ export default function HeirClaimPortal() {
       setIsProcessing(true);
       setFeedbackMessage(null);
       if (isWrongChain && switchChain) {
-        await switchChain({ chainId: worldChainSepolia.id });
+        await switchChain({ chainId: activeChain.id });
       }
       const hash = await writeContractAsync({
-        chainId: worldChainSepolia.id,
+        chainId: activeChain.id,
         address: vaultAddress,
         abi: LegacyVaultABI,
         functionName: "executeClaim",
@@ -423,9 +423,9 @@ export default function HeirClaimPortal() {
           <div className="console-alert console-alert--warning">
             <div className="console-alert-body">
               <strong>Wrong network</strong>
-              <p>Switch to World Chain Sepolia to check vault status and claim assets.</p>
+              <p>Switch to {CHAIN_NAME} to check vault status and claim assets.</p>
             </div>
-            <button type="button" onClick={() => switchChain?.({ chainId: worldChainSepolia.id })} className="flow-btn">
+            <button type="button" onClick={() => switchChain?.({ chainId: activeChain.id })} className="flow-btn">
               Switch network
             </button>
           </div>

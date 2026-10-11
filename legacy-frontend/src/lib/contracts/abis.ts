@@ -18,7 +18,7 @@ export const LegacyVaultFactoryABI = [
       {
         "name": "verifier",
         "type": "address",
-        "internalType": "contract WorldIDVerifierAdapter"
+        "internalType": "contract ILivenessVerifier"
       },
       {
         "name": "checkInInterval",
@@ -282,19 +282,9 @@ export const LegacyVaultABI = [
     "name": "checkIn",
     "inputs": [
       {
-        "name": "root",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "nullifierHash",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "proof",
-        "type": "uint256[8]",
-        "internalType": "uint256[8]"
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
@@ -555,7 +545,7 @@ export const LegacyVaultABI = [
       {
         "name": "_verifier",
         "type": "address",
-        "internalType": "contract WorldIDVerifierAdapter"
+        "internalType": "contract ILivenessVerifier"
       },
       {
         "name": "_checkInInterval",
@@ -636,6 +626,32 @@ export const LegacyVaultABI = [
   },
   {
     "type": "function",
+    "name": "livenessChallenge",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "livenessNonce",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "livenessRegistered",
     "inputs": [],
     "outputs": [
@@ -665,19 +681,9 @@ export const LegacyVaultABI = [
     "name": "registerLiveness",
     "inputs": [
       {
-        "name": "root",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "nullifierHash",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "proof",
-        "type": "uint256[8]",
-        "internalType": "uint256[8]"
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
@@ -760,7 +766,7 @@ export const LegacyVaultABI = [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract WorldIDVerifierAdapter"
+        "internalType": "contract ILivenessVerifier"
       }
     ],
     "stateMutability": "view"
@@ -1195,106 +1201,68 @@ export const LegacyVaultABI = [
   }
 ] as const;
 
-export const WorldIDVerifierAdapterABI = [
-  {
-    "type": "constructor",
-    "inputs": [
-      {
-        "name": "_worldId",
-        "type": "address",
-        "internalType": "contract IWorldID"
-      },
-      {
-        "name": "_groupId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_externalNullifierHash",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
+export const PasskeyVerifierAdapterABI = [
   {
     "type": "function",
-    "name": "externalNullifierHash",
-    "inputs": [],
+    "name": "credentialOf",
+    "inputs": [
+      {
+        "name": "vault",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "qx",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "groupId",
-    "inputs": [],
+    "name": "isRegistered",
+    "inputs": [
+      {
+        "name": "vault",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "hashSignal",
+    "name": "registerCredential",
     "inputs": [
-      {
-        "name": "vault",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "signalAddress",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "registerNullifier",
-    "inputs": [
-      {
-        "name": "vault",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "signalAddress",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "root",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "nullifierHash",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "challenge",
+        "type": "bytes32",
+        "internalType": "bytes32"
       },
       {
         "name": "proof",
-        "type": "uint256[8]",
-        "internalType": "uint256[8]"
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
@@ -1302,68 +1270,51 @@ export const WorldIDVerifierAdapterABI = [
   },
   {
     "type": "function",
-    "name": "vaultNullifier",
+    "name": "verifyLiveness",
     "inputs": [
       {
-        "name": "vault",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "registeredNullifierHash",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "verifyCheckIn",
-    "inputs": [
-      {
-        "name": "vault",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "signalAddress",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "root",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "nullifierHash",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "challenge",
+        "type": "bytes32",
+        "internalType": "bytes32"
       },
       {
         "name": "proof",
-        "type": "uint256[8]",
-        "internalType": "uint256[8]"
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
     "stateMutability": "view"
   },
   {
-    "type": "function",
-    "name": "worldId",
-    "inputs": [],
-    "outputs": [
+    "type": "event",
+    "name": "CredentialRegistered",
+    "inputs": [
       {
-        "name": "",
+        "name": "vault",
         "type": "address",
-        "internalType": "contract IWorldID"
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "qx",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "qy",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
       }
     ],
-    "stateMutability": "view"
+    "anonymous": false
   },
   {
     "type": "error",
@@ -1372,12 +1323,17 @@ export const WorldIDVerifierAdapterABI = [
   },
   {
     "type": "error",
-    "name": "NullifierMismatch",
+    "name": "InvalidAssertion",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "NullifierNotRegistered",
+    "name": "InvalidPublicKey",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotRegistered",
     "inputs": []
   }
 ] as const;
@@ -1385,15 +1341,6 @@ export const WorldIDVerifierAdapterABI = [
 // Errors that can bubble up through LegacyVault.registerLiveness / checkIn:
 // the verifier adapter's own errors plus the World ID router / Semaphore
 // verifier errors. Merge with LegacyVaultABI so viem can decode the revert.
-export const WorldIDRevertErrorsABI = [
-  { "type": "error", "name": "AlreadyRegistered", "inputs": [] },
-  { "type": "error", "name": "NullifierMismatch", "inputs": [] },
-  { "type": "error", "name": "NullifierNotRegistered", "inputs": [] },
-  { "type": "error", "name": "ProofInvalid", "inputs": [] },
-  { "type": "error", "name": "NonExistentRoot", "inputs": [] },
-  { "type": "error", "name": "ExpiredRoot", "inputs": [] }
-] as const;
-
 export const ERC20AdapterABI = [
   {
     "type": "constructor",

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePublicClient } from "wagmi";
-import { worldChainSepolia } from "@/lib/constants";
+import { activeChain } from "@/lib/constants";
 import {
   checkAllocationsHealth,
   loadVaultAllocations,
@@ -39,7 +39,7 @@ const EMPTY: Snapshot = { key: "", allocations: [], health: {}, error: null };
  * approved.
  */
 export function useAllocationHealth(vault: Address | undefined, owner: Address | undefined, options: Options = {}) {
-  const publicClient = usePublicClient({ chainId: worldChainSepolia.id });
+  const publicClient = usePublicClient({ chainId: activeChain.id });
   const { heir } = options;
 
   const key = vault ? `${vault}:${owner ?? ""}:${heir ?? ""}`.toLowerCase() : "";
