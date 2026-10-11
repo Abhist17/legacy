@@ -293,14 +293,8 @@ contract LegacyPolicyEngineTest is Test {
         uint256 delay = 90 days;
 
         // Rule: Bob receives 500 USDC after 90 days delay
-        PolicyERC20Adapter adapter = new PolicyERC20Adapter(
-            address(token),
-            500 * 10 ** 6,
-            address(vault),
-            delay,
-            heirBob,
-            heirCharlie
-        );
+        PolicyERC20Adapter adapter =
+            new PolicyERC20Adapter(address(token), 500 * 10 ** 6, address(vault), delay, heirBob, heirCharlie);
 
         bytes32 assetId = keccak256("BOB-DELAYED-90D");
 
