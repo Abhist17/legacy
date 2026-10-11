@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { type Hex } from "viem";
-import { useChainId, useWriteContract, usePublicClient } from "wagmi";
+import { useChainId, useWriteContract, usePublicClient, useReadContract } from "wagmi";
 import {
   type StructuredPolicy,
   type PolicyRule,
@@ -62,8 +62,19 @@ export function PolicyEngineModal({
   // Fallback policy engine address
   const policyEngineAddress = (CONTRACT_ADDRESSES.policyEngine || context.vaultAddress) as Address;
 
-  // Next target policy version
-  const targetVersion = (policy?.version ?? currentPolicyVersion) + 1;
+  // The engine hashes every commitment against latestVersion(vault) + 1, so
+  // read that straight from the contract. (The draft policy already carries
+  // its own version, so adding 1 to it hashed the first commit as version 2
+  // and it was always rejected with PolicyHashMismatch.)
+  const { data: onChainLatestVersion } = useReadContract({
+    address: CONTRACT_ADDRESSES.policyEngine || undefined,
+    abi: LegacyPolicyEngineABI,
+    functionName: "latestVersion",
+    args: [context.vaultAddress],
+    query: { enabled: Boolean(CONTRACT_ADDRESSES.policyEngine) },
+  });
+  const targetVersion =
+    (onChainLatestVersion !== undefined ? Number(onChainLatestVersion) : currentPolicyVersion) + 1;
 
   // Computed policy hash
   const computedHash = useMemo<Hex | null>(() => {
