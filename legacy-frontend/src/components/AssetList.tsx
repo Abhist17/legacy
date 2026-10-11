@@ -20,6 +20,7 @@ import {
 } from "viem";
 import { VaultStatus, activeChain, CHAIN_NAME, CHAIN_TOKENS } from "@/lib/constants";
 import { ERC20ABI, ERC20AdapterABI, ERC20AdapterBytecode } from "@/lib/contracts/adapters";
+import { LegacyVaultABI } from "@/lib/contracts/abis";
 import { AddressChip } from "./AddressChip";
 import { Skeleton } from "./Skeleton";
 import { AllocationHealthBadge, AllocationReadinessBanner } from "./AllocationHealth";
@@ -165,6 +166,10 @@ export function AssetList({
   // Orchestration state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [executionStage, setExecutionStage] = useState<string | null>(null);
+  // A token allocation that got as far as a deployed, approved adapter but
+  // could not be registered (e.g. the vault's check-in window lapsed midway).
+  // Retrying the same allocation reuses it instead of wrapping and deploying again.
+  const [pendingAdapter, setPendingAdapter] = useState<{ key: string; adapter: `0x${string}` } | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   // Errors from table actions (remove, re-approve), shown beside the table:
   // `errorText` only renders inside the assignment dialog.
@@ -390,6 +395,19 @@ export function AssetList({
       return;
     }
 
+    // The vault only accepts assignments while it is active (Green). Check
+    // before asking for any transaction, so a lapsed check-in never costs the
+    // owner a wrap, a deployment and an approval first.
+    if (publicClient && vaultAddress) {
+      const status = await publicClient
+        .readContract({ address: vaultAddress, abi: LegacyVaultABI, functionName: "getStatus" })
+        .catch(() => undefined);
+      if (status !== undefined && Number(status) !== VaultStatus.Green) {
+        setErrorText("Your vault isn't active because a check-in is overdue. Check in first, then assign assets.");
+        return;
+      }
+    }
+
     // Branch 1: Advanced / Custom Executor
     if (modalMode === "EXECUTOR") {
       if (!manualLabel.trim() || !manualExecutorAddress.trim()) {
@@ -471,7 +489,10 @@ export function AssetList({
         return;
       }
 
-      if (wrapNative) {
+      const allocationKey = `${tokenAddr}:${parsedAmount}:${selectedHeir}`.toLowerCase();
+      const reusableAdapter = pendingAdapter?.key === allocationKey ? pendingAdapter.adapter : null;
+
+      if (wrapNative && !reusableAdapter) {
         setExecutionStage(`Wrapping ${amount} MON into WMON (it stays in your wallet)...`);
         const wrapHash = await writeContractAsync({
           chainId: activeChain.id,
@@ -483,55 +504,59 @@ export function AssetList({
         await publicClient.waitForTransactionReceipt({ hash: wrapHash });
       }
 
-      // Step 1: Deploy ERC20Adapter
-      setExecutionStage(`[1/3] Deploying Non-Custodial ERC20Adapter for ${amount} ${tokenSymbol}...`);
-      console.log("👉 Deploying ERC20Adapter:", {
-        token: tokenAddr,
-        amount: parsedAmount.toString(),
-        vault: vaultAddress,
-      });
-
-      const deployHash = await walletClient.deployContract({
-        abi: ERC20AdapterABI,
-        bytecode: ERC20AdapterBytecode,
-        args: [tokenAddr, parsedAmount, vaultAddress],
-        chain: activeChain,
-        account: address,
-      });
-
-      console.log("⏳ ERC20Adapter deployment tx broadcast:", deployHash);
-      setExecutionStage(`[1/3] Awaiting adapter deployment confirmation on ${CHAIN_NAME}...`);
-
-      const deployReceipt = await publicClient.waitForTransactionReceipt({ hash: deployHash });
-      const adapterAddress = deployReceipt.contractAddress;
-
+      let adapterAddress = reusableAdapter;
       if (!adapterAddress) {
-        throw new Error("Adapter deployment succeeded but contract address was not returned.");
-      }
-      console.log("✅ ERC20Adapter deployed at:", adapterAddress);
+        // Step 1: Deploy ERC20Adapter
+        setExecutionStage(`[1/3] Deploying Non-Custodial ERC20Adapter for ${amount} ${tokenSymbol}...`);
+        console.log("👉 Deploying ERC20Adapter:", {
+          token: tokenAddr,
+          amount: parsedAmount.toString(),
+          vault: vaultAddress,
+        });
 
-      // Step 2: Approve the newly deployed adapter
-      setExecutionStage(`[2/3] Authorizing ${amount} ${tokenSymbol} allowance for executor...`);
+        const deployHash = await walletClient.deployContract({
+          abi: ERC20AdapterABI,
+          bytecode: ERC20AdapterBytecode,
+          args: [tokenAddr, parsedAmount, vaultAddress],
+          chain: activeChain,
+          account: address,
+        });
 
-      const currentAllowance = await publicClient.readContract({
-        address: tokenAddr,
-        abi: ERC20ABI,
-        functionName: "allowance",
-        args: [address, adapterAddress],
-      });
+        console.log("⏳ ERC20Adapter deployment tx broadcast:", deployHash);
+        setExecutionStage(`[1/3] Awaiting adapter deployment confirmation on ${CHAIN_NAME}...`);
 
-      if (currentAllowance < parsedAmount) {
-        console.log("👉 Prompting approval for adapter:", adapterAddress);
-        const approveHash = await writeContractAsync({
-          chainId: activeChain.id,
+        const deployReceipt = await publicClient.waitForTransactionReceipt({ hash: deployHash });
+        adapterAddress = deployReceipt.contractAddress ?? null;
+
+        if (!adapterAddress) {
+          throw new Error("Adapter deployment succeeded but contract address was not returned.");
+        }
+        console.log("✅ ERC20Adapter deployed at:", adapterAddress);
+
+        // Step 2: Approve the newly deployed adapter
+        setExecutionStage(`[2/3] Authorizing ${amount} ${tokenSymbol} allowance for executor...`);
+
+        const currentAllowance = await publicClient.readContract({
           address: tokenAddr,
           abi: ERC20ABI,
-          functionName: "approve",
-          args: [adapterAddress, parsedAmount],
+          functionName: "allowance",
+          args: [address, adapterAddress],
         });
-        console.log("⏳ Approval tx broadcast:", approveHash);
-        await publicClient.waitForTransactionReceipt({ hash: approveHash });
-        console.log("✅ Token allowance confirmed");
+
+        if (currentAllowance < parsedAmount) {
+          console.log("👉 Prompting approval for adapter:", adapterAddress);
+          const approveHash = await writeContractAsync({
+            chainId: activeChain.id,
+            address: tokenAddr,
+            abi: ERC20ABI,
+            functionName: "approve",
+            args: [adapterAddress, parsedAmount],
+          });
+          console.log("⏳ Approval tx broadcast:", approveHash);
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          console.log("✅ Token allowance confirmed");
+        }
+        setPendingAdapter({ key: allocationKey, adapter: adapterAddress });
       }
 
       // Step 3: Register asset on LegacyVault
@@ -542,13 +567,19 @@ export function AssetList({
         stringToHex(`${assetLabel}-${selectedHeir}-${adapterAddress}`)
       );
 
-      await onAssignAsset(
-        assetId,
-        selectedHeir as `0x${string}`,
-        adapterAddress,
-        assetLabel
-      );
+      try {
+        await onAssignAsset(assetId, selectedHeir as `0x${string}`, adapterAddress, assetLabel);
+      } catch (assignErr) {
+        const msg = assignErr instanceof Error ? assignErr.message : "";
+        if (/not (in )?green|Red status|Amber status|HeirChangesLocked/i.test(msg)) {
+          throw new Error(
+            "Your check-in window ran out while this was being set up. Check in, then press the button again: the wrapped tokens and the adapter are reused, nothing is repeated."
+          );
+        }
+        throw assignErr;
+      }
 
+      setPendingAdapter(null);
       setShowAssignModal(false);
       resetForm();
     } catch (err: unknown) {

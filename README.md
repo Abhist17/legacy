@@ -124,7 +124,7 @@ bun install                     # or npm install
 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Passkeys work on `localhost` and over https. On testnet, new vaults use short demo timings (45s / 15s / 45s), so a whole inheritance plays out in a few minutes; mainnet defaults to 30d / 7d / 3d.
+Open [http://localhost:3000](http://localhost:3000). Passkeys work on `localhost` and over https. On testnet, new vaults use short demo timings (2 min check-in, 30s grace, 60s veto window), so a whole inheritance plays out in a few minutes; mainnet defaults to 30d / 7d / 3d.
 
 ---
 

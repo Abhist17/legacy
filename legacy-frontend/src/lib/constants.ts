@@ -38,8 +38,9 @@ export const CONTRACT_ADDRESSES = {
 
 /**
  * Timings every new vault starts with; owners can change them any time from
- * the Parameters tab. Demo timings let a full inheritance play out in a few
- * minutes. They are the default on testnet, and real-world timings are the
+ * the Timing tab. Demo timings let a full inheritance play out in a few
+ * minutes while leaving enough time to finish a multi-transaction setup step
+ * (assigning an asset, committing a policy) between check-ins. They are the default on testnet, and real-world timings are the
  * default on mainnet. NEXT_PUBLIC_DEMO_TIMINGS ("true" / "false") overrides.
  */
 const DEMO_TIMINGS =
@@ -48,7 +49,7 @@ const DEMO_TIMINGS =
 const DAY = 86_400n;
 
 export const DEFAULT_VAULT_TIMINGS = DEMO_TIMINGS
-  ? { checkInInterval: 45n, gracePeriod: 15n, contestableWindow: 45n }
+  ? { checkInInterval: 120n, gracePeriod: 30n, contestableWindow: 60n }
   : { checkInInterval: 30n * DAY, gracePeriod: 7n * DAY, contestableWindow: 3n * DAY };
 
 export const PROTOCOL_FLOORS = {
