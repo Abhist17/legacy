@@ -9,7 +9,7 @@
 // all silently break an allocation while the vault keeps looking healthy.
 // This module checks both, per asset type.
 
-import { formatUnits, getAbiItem, parseAbi, type PublicClient } from "viem";
+import { formatUnits, parseAbi, type PublicClient } from "viem";
 import { LegacyVaultABI } from "@/lib/contracts/abis";
 
 type Address = `0x${string}`;
@@ -93,8 +93,6 @@ export interface AllocationHealth {
 
 export type AllocationHealthMap = Record<Hex, AllocationHealth>;
 
-const assetAssignedEvent = getAbiItem({ abi: LegacyVaultABI, name: "AssetAssigned" });
-
 async function read<T>(promise: Promise<T>): Promise<T | undefined> {
   try {
     return await promise;
@@ -145,26 +143,21 @@ export function describeAsset(asset: AllocationAsset): string {
 }
 
 /**
- * Loads a vault's live allocations: discovered through AssetAssigned logs,
- * then read back from `allocations()` so removed or reassigned assets
- * reflect current state rather than history.
+ * Loads a vault's live allocations, read entirely from state: the vault
+ * lists every asset id it has assigned, and `allocations()` gives each one's
+ * current state. (Event logs can't be used: public Monad RPCs cap eth_getLogs
+ * at a 100-block range.)
  */
 export async function loadVaultAllocations(
   client: PublicClient,
   vault: Address,
   options: { heir?: Address } = {}
 ): Promise<VaultAllocation[]> {
-  const logs = await client.getLogs({
+  const assetIds = (await client.readContract({
     address: vault,
-    event: assetAssignedEvent,
-    args: options.heir ? { heir: options.heir } : undefined,
-    fromBlock: 0n,
-    toBlock: "latest",
-  });
-
-  const assetIds = Array.from(
-    new Set(logs.map((log) => log.args.assetId).filter((id): id is Hex => Boolean(id)))
-  );
+    abi: LegacyVaultABI,
+    functionName: "getAssetIds",
+  })) as readonly Hex[];
 
   const allocations = await Promise.all(
     assetIds.map(async (assetId): Promise<VaultAllocation | null> => {

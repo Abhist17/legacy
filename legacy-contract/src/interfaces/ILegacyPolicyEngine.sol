@@ -40,10 +40,7 @@ interface ILegacyPolicyEngine {
 
     function getActivePolicy(address vault) external view returns (PolicyCommitment memory);
 
-    function getPolicyRule(address vault, uint256 version, uint256 index)
-        external
-        view
-        returns (PolicyRule memory);
+    function getPolicyRule(address vault, uint256 version, uint256 index) external view returns (PolicyRule memory);
 
     function getPolicyRules(address vault, uint256 version) external view returns (PolicyRule[] memory);
 

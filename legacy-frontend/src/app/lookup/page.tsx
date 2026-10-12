@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { isAddress } from "viem";
 import { useReadContract } from "wagmi";
-import { VaultStatus, CONTRACT_ADDRESSES, shortAddress, humanDuration, timeAgo } from "@/lib/constants";
+import { VaultStatus, CONTRACT_ADDRESSES, shortAddress, humanDuration, timeAgo, explorerAddressUrl, CHAIN_NAME, EXPLORER_NAME } from "@/lib/constants";
 import { fetchVaultMeta, type VaultMetaRecord } from "@/lib/vault-meta/client";
 import { LegacyVaultABI } from "@/lib/contracts/abis";
 import { StatusLamp } from "@/components/StatusLamp";
@@ -52,7 +52,6 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
-const WORLDSCAN = "https://sepolia.worldscan.org/address";
 
 const WHAT_YOU_SEE = [
   { value: "STATUS", label: "Is the owner still checking in?" },
@@ -160,7 +159,7 @@ export default function TransparencyLookup() {
 
   // Public answer to "would the heirs actually receive what they were
   // promised?" — assets stay in the owner's wallet, so this is checked live.
-  const { readiness, isLoading: isCheckingBacking } = useAllocationHealth(
+  const { allocations, readiness, isLoading: isCheckingBacking } = useAllocationHealth(
     queriedAddress ?? undefined,
     owner as `0x${string}` | undefined
   );
@@ -342,20 +341,20 @@ export default function TransparencyLookup() {
               <div style={{ background: "rgba(224, 90, 71, 0.1)", border: "1px solid var(--status-red)", padding: "24px" }}>
                 <p style={{ fontSize: "1rem", color: "#ffffff", margin: 0, fontWeight: 600 }}>No vault found at this address</p>
                 <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", marginTop: "6px", lineHeight: 1.5 }}>
-                  Double-check <span className="font-data" style={{ color: "var(--text-primary)" }}>{shortAddress(queriedAddress)}</span>. Only Legacy vaults on World Chain Sepolia can be looked up.
+                  Double-check <span className="font-data" style={{ color: "var(--text-primary)" }}>{shortAddress(queriedAddress)}</span>. Only Legacy vaults on {CHAIN_NAME} can be looked up.
                 </p>
                 <div style={{ marginTop: "16px", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <button type="button" onClick={handleReset} className="btn-brass" style={{ fontSize: "0.75rem", padding: "6px 14px" }}>
                     Try another address
                   </button>
                   <a
-                    href={`${WORLDSCAN}/${queriedAddress}`}
+                    href={explorerAddressUrl(queriedAddress)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn-secondary"
                     style={{ fontSize: "0.75rem", padding: "6px 14px" }}
                   >
-                    Open on Worldscan ↗
+                    Open on {EXPLORER_NAME} ↗
                   </a>
                 </div>
               </div>
@@ -401,7 +400,7 @@ export default function TransparencyLookup() {
               <div style={{ border: "1px solid rgba(255, 255, 255, 0.12)", padding: "0 24px" }}>
                 <FactRow label="Last check-in">
                   {/* The contract seeds lastCheckIn at creation, so it only reflects a real
-                      check-in once World ID is registered. */}
+                      check-in once a passkey is set up. */}
                   {livenessRegistered && lastCheckInSeconds > 0 ? (
                     <span title={new Date(lastCheckInSeconds * 1000).toLocaleString()}>{timeAgo(lastCheckInSeconds)}</span>
                   ) : (
@@ -426,7 +425,11 @@ export default function TransparencyLookup() {
                   {isCheckingBacking && readiness.backed + readiness.broken === 0 ? (
                     "Checking…"
                   ) : readiness.pending === 0 ? (
-                    "Nothing assigned yet"
+                    allocations.length === 0
+                      ? "Nothing assigned yet"
+                      : allocations.length === 1
+                        ? "Claimed by the heir"
+                        : `All ${allocations.length} claimed by heirs`
                   ) : readiness.broken > 0 ? (
                     <span style={{ color: "var(--status-red)" }}>
                       {readiness.backed} of {readiness.pending} — {readiness.broken} would not pay out in full
@@ -441,16 +444,16 @@ export default function TransparencyLookup() {
                     </span>
                   )}
                 </FactRow>
-                <FactRow label="World ID">
+                <FactRow label="Passkey check-in">
                   <span style={{ color: livenessRegistered ? "var(--status-green)" : "var(--status-amber)" }}>
-                    {livenessRegistered ? "Verified" : "Not set up yet"}
+                    {livenessRegistered ? "Set up" : "Not set up yet"}
                   </span>
                 </FactRow>
                 <FactRow label="Owner address">
                   {ownerAddress ? (
                     <>
                       <a
-                        href={`${WORLDSCAN}/${ownerAddress}`}
+                        href={explorerAddressUrl(ownerAddress)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-data"
@@ -467,7 +470,7 @@ export default function TransparencyLookup() {
                 </FactRow>
                 <FactRow label="Vault address">
                   <a
-                    href={`${WORLDSCAN}/${queriedAddress}`}
+                    href={explorerAddressUrl(queriedAddress)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-data"
@@ -509,7 +512,7 @@ export default function TransparencyLookup() {
         </div>
 
         <p style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: 24 }}>
-          Status is read live from World Chain Sepolia.
+          Status is read live from {CHAIN_NAME}.
         </p>
       </div>
     </div>

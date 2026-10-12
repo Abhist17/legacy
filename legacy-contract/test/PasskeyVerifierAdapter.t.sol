@@ -124,6 +124,41 @@ contract PasskeyVerifierAdapterTest is Test {
         assertEq(vault.livenessNonce(), 1);
     }
 
+    /// @notice Registration requires a fresh proof, so it counts as a check-in:
+    ///         an owner who sets up after the interval lapsed is Green again
+    ///         without needing a second biometric prompt.
+    function test_LateRegistrationRestoresGreen() public {
+        vm.warp(block.timestamp + CHECK_IN_INTERVAL + 1);
+        assertEq(uint256(vault.getStatus()), uint256(LegacyVault.Status.Amber));
+
+        bytes memory proof = _registrationProof(OWNER_KEY, vault.livenessChallenge());
+        vm.expectEmit(false, false, false, true, address(vault));
+        emit LegacyVault.CheckedIn(block.timestamp);
+        vm.prank(owner);
+        vault.registerLiveness(proof);
+
+        assertEq(vault.lastCheckIn(), block.timestamp);
+        assertEq(uint256(vault.getStatus()), uint256(LegacyVault.Status.Green));
+    }
+
+    /// @notice An owner who never set up check-ins can still defeat a claim by
+    ///         registering during the contestable window.
+    function test_LateRegistrationDefeatsOpenClaim() public {
+        vm.prank(owner);
+        vault.addHeir(heir);
+
+        vm.warp(block.timestamp + CHECK_IN_INTERVAL + GRACE_PERIOD);
+        vm.prank(heir);
+        vault.initiateClaim();
+
+        _register();
+
+        vm.warp(block.timestamp + CONTESTABLE_WINDOW);
+        vm.prank(heir);
+        vm.expectRevert(LegacyVault.VaultNotRed.selector);
+        vault.finalizeClaim();
+    }
+
     function test_RegisterEmitsCredentialRegistered() public {
         (bytes32 qx, bytes32 qy) = _pubKey(OWNER_KEY);
         bytes memory proof = _registrationProof(OWNER_KEY, vault.livenessChallenge());

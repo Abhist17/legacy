@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { type Hex } from "viem";
-import { useChainId, useWriteContract, usePublicClient } from "wagmi";
+import { useChainId, useWriteContract, usePublicClient, useReadContract } from "wagmi";
 import {
   type StructuredPolicy,
   type PolicyRule,
@@ -14,7 +14,7 @@ import { validatePolicy } from "@/lib/policy/validate";
 import { simulatePolicy } from "@/lib/policy/simulate";
 import { compileIntent } from "@/lib/policy/compiler";
 import { type AllocationHealthMap } from "@/lib/allocations";
-import { CONTRACT_ADDRESSES, worldChainSepolia } from "@/lib/constants";
+import { CONTRACT_ADDRESSES, activeChain, explorerTxUrl } from "@/lib/constants";
 import { LegacyPolicyEngineABI } from "@/lib/contracts/abis";
 
 interface PolicyEngineModalProps {
@@ -62,8 +62,19 @@ export function PolicyEngineModal({
   // Fallback policy engine address
   const policyEngineAddress = (CONTRACT_ADDRESSES.policyEngine || context.vaultAddress) as Address;
 
-  // Next target policy version
-  const targetVersion = (policy?.version ?? currentPolicyVersion) + 1;
+  // The engine hashes every commitment against latestVersion(vault) + 1, so
+  // read that straight from the contract. (The draft policy already carries
+  // its own version, so adding 1 to it hashed the first commit as version 2
+  // and it was always rejected with PolicyHashMismatch.)
+  const { data: onChainLatestVersion } = useReadContract({
+    address: CONTRACT_ADDRESSES.policyEngine || undefined,
+    abi: LegacyPolicyEngineABI,
+    functionName: "latestVersion",
+    args: [context.vaultAddress],
+    query: { enabled: Boolean(CONTRACT_ADDRESSES.policyEngine) },
+  });
+  const targetVersion =
+    (onChainLatestVersion !== undefined ? Number(onChainLatestVersion) : currentPolicyVersion) + 1;
 
   // Computed policy hash
   const computedHash = useMemo<Hex | null>(() => {
@@ -72,7 +83,7 @@ export function PolicyEngineModal({
       return computePolicyHash(
         context.vaultAddress,
         targetVersion,
-        chainId || worldChainSepolia.id,
+        chainId || activeChain.id,
         policyEngineAddress,
         policy.rules
       );
@@ -759,7 +770,7 @@ export function PolicyEngineModal({
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[#2E353A]">
                   <span className="text-[#9A9E98]">Network / Chain ID</span>
-                  <span className="font-mono text-[#EDEAE3]">{chainId || worldChainSepolia.id}</span>
+                  <span className="font-mono text-[#EDEAE3]">{chainId || activeChain.id}</span>
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-[#2E353A]">
                   <span className="text-[#9A9E98]">Rule Count</span>
@@ -833,7 +844,7 @@ export function PolicyEngineModal({
                   <div>
                     <span className="text-[#9A9E98] block">Transaction Hash:</span>
                     <a
-                      href={`${worldChainSepolia.blockExplorers?.default?.url || "https://sepolia.worldscan.org"}/tx/${txHash}`}
+                      href={explorerTxUrl(txHash)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono text-[#B8894A] hover:underline break-all"

@@ -25,3 +25,5 @@ monad_testnet = "https://testnet-rpc.monad.xyz"
 [etherscan]
 sepolia = { key = "${ETHERSCAN_API_KEY}" }
 worldchain_sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api.etherscan.io/v2/api?chainid=4801" }
+monad = { key = "${ETHERSCAN_API_KEY}", url = "https://api.etherscan.io/v2/api?chainid=143" }
+monad_testnet = { key = "${ETHERSCAN_API_KEY}", url = "https://api.etherscan.io/v2/api?chainid=10143" }

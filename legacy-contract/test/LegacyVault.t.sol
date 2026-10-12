@@ -547,6 +547,43 @@ contract LegacyVaultTest is Test {
         vault.removeAsset(ASSET_1);
     }
 
+    // ---------------------------------------------------------------------
+    // Asset id enumeration (state, not logs: Monad RPCs cap getLogs at 100 blocks)
+    // ---------------------------------------------------------------------
+
+    function test_GetAssetIdsListsAssignedAssetsInOrder() public {
+        vm.prank(owner);
+        vault.assignAsset(ASSET_2, otherHeir, mockExecutor);
+
+        bytes32[] memory ids = vault.getAssetIds();
+        assertEq(ids.length, 2);
+        assertEq(ids[0], ASSET_1);
+        assertEq(ids[1], ASSET_2);
+    }
+
+    function test_RemovedAssetStaysListedButReportsNotExisting() public {
+        vm.prank(owner);
+        vault.removeAsset(ASSET_1);
+
+        bytes32[] memory ids = vault.getAssetIds();
+        assertEq(ids.length, 1);
+        (,,, bool exists,) = vault.allocations(ASSET_1);
+        assertFalse(exists);
+    }
+
+    function test_ReassigningAnAssetIdDoesNotDuplicateIt() public {
+        vm.prank(owner);
+        vault.removeAsset(ASSET_1);
+        vm.prank(owner);
+        vault.assignAsset(ASSET_1, otherHeir, mockExecutor);
+
+        bytes32[] memory ids = vault.getAssetIds();
+        assertEq(ids.length, 1);
+        (address assignedHeir,,, bool exists,) = vault.allocations(ASSET_1);
+        assertTrue(exists);
+        assertEq(assignedHeir, otherHeir);
+    }
+
     function test_executeClaimHappyPath() public {
         _warpToRed();
         vm.prank(heir);

@@ -31,9 +31,8 @@ contract LegacyPolicyEngine is ILegacyPolicyEngine {
     bytes32 public constant RULE_TYPEHASH = keccak256(
         "PolicyRule(address beneficiary,bytes32 assetId,address token,uint256 amount,uint256 percentageBps,uint256 releaseDelaySeconds,address fallbackBeneficiary)"
     );
-    bytes32 public constant POLICY_TYPEHASH = keccak256(
-        "Policy(address vault,uint256 version,bytes32 trigger,PolicyRule[] rules)"
-    );
+    bytes32 public constant POLICY_TYPEHASH =
+        keccak256("Policy(address vault,uint256 version,bytes32 trigger,PolicyRule[] rules)");
 
     error InvalidVault();
     error NotVaultOwner();
@@ -96,16 +95,7 @@ contract LegacyPolicyEngine is ILegacyPolicyEngine {
 
         bytes32 rulesContentHash = keccak256(abi.encodePacked(ruleHashes));
 
-        return keccak256(
-            abi.encode(
-                domainSeparator(),
-                POLICY_TYPEHASH,
-                vault,
-                version,
-                trigger,
-                rulesContentHash
-            )
-        );
+        return keccak256(abi.encode(domainSeparator(), POLICY_TYPEHASH, vault, version, trigger, rulesContentHash));
     }
 
     /**
@@ -165,14 +155,7 @@ contract LegacyPolicyEngine is ILegacyPolicyEngine {
             _rules[vault][newVersion][i] = rules[i];
         }
 
-        emit PolicyCommitted(
-            vault,
-            newVersion,
-            policyHash,
-            msg.sender,
-            rules.length,
-            block.timestamp
-        );
+        emit PolicyCommitted(vault, newVersion, policyHash, msg.sender, rules.length, block.timestamp);
 
         return newVersion;
     }
@@ -190,12 +173,7 @@ contract LegacyPolicyEngine is ILegacyPolicyEngine {
         return _rules[vault][version][index];
     }
 
-    function getPolicyRules(address vault, uint256 version)
-        external
-        view
-        override
-        returns (PolicyRule[] memory)
-    {
+    function getPolicyRules(address vault, uint256 version) external view override returns (PolicyRule[] memory) {
         PolicyCommitment memory commitment = policyHistory[vault][version];
         if (!commitment.exists) {
             return new PolicyRule[](0);

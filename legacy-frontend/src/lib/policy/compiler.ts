@@ -54,22 +54,16 @@ export function compileIntentDeterministic(
 
   for (const clause of clauses) {
     // 1. Identify Heir
-    let matchedHeir: { address: Address; name?: string } | null = null;
-    for (const heir of context.heirs) {
-      if (heir.name && new RegExp(`\\b${escapeRegex(heir.name)}\\b`, "i").test(clause)) {
-        matchedHeir = heir;
-        break;
-      }
-      if (new RegExp(heir.address, "i").test(clause)) {
-        matchedHeir = heir;
-        break;
-      }
-      // Check first 6 chars of address
-      if (new RegExp(heir.address.slice(0, 6), "i").test(clause)) {
-        matchedHeir = heir;
-        break;
-      }
-    }
+    // Saved labels are often "Name — relationship" (the heir form suggests
+    // "Jordan — daughter"), while people write "give Jordan 50%". Prefer the
+    // full label, then the name alone, then the address.
+    const matchedHeir: { address: Address; name?: string } | null =
+      context.heirs.find((heir) => heir.name && mentions(clause, heir.name)) ??
+      context.heirs.find((heir) => heir.name && mentions(clause, personName(heir.name))) ??
+      context.heirs.find(
+        (heir) => new RegExp(heir.address, "i").test(clause) || new RegExp(heir.address.slice(0, 6), "i").test(clause)
+      ) ??
+      null;
 
     // 2. Identify Asset
     let matchedAsset = context.assets[0]; // default to first asset if single asset exists
@@ -200,6 +194,16 @@ export function compileIntentDeterministic(
     policy: structuredPolicy,
     explanation: `Successfully compiled into ${matchedRules.length} deterministic rule(s).`,
   };
+}
+
+/** The name part of a heir label: "Priya — sister" -> "Priya". */
+function personName(label: string): string {
+  return label.split(/\s*(?:—|–|-|,|\(|\|)\s*/)[0].trim();
+}
+
+/** Whether `clause` mentions `name` as a whole word. */
+function mentions(clause: string, name: string): boolean {
+  return name.trim().length >= 2 && new RegExp(`\\b${escapeRegex(name.trim())}\\b`, "i").test(clause);
 }
 
 function escapeRegex(str: string): string {
